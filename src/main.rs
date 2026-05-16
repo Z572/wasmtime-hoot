@@ -296,6 +296,16 @@ fn rt_string_upcase(
     ExternRef::new(caller, ret)
 }
 
+fn rt_string_downcase(
+    caller: Caller<'_, HootStatus>,
+    a: Rooted<ExternRef>,
+) -> Result<Rooted<ExternRef>> {
+    let c: String = extern_ref_to_string(a, &caller)?;
+    let ret = c.to_lowercase();
+    trace!("string_downcase {:?}", &ret);
+    ExternRef::new(caller, ret)
+}
+
 fn rt_stream_read(
     _caller: Caller<'_, HootStatus>,
     _param: Rooted<ExternRef>,
@@ -828,6 +838,7 @@ fn main() -> Result<()> {
     linker.func_wrap("rt", "stream_make_chunk", rt_stream_make_chunk)?;
     linker.func_wrap("rt", "stream_read", rt_stream_read)?;
     linker.func_wrap("rt", "string_upcase", rt_string_upcase)?;
+    linker.func_wrap("rt", "string_downcase", rt_string_downcase)?;
     linker.func_wrap("rt", "weak_ref_deref", rt_weak_ref_deref)?;
     linker.func_wrap(
         "finalization",

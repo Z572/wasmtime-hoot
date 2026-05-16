@@ -14,5 +14,6 @@
      1
      1+
      (make-hash-table 20)
+     (string-downcase "BIG")
      (string-upcase "df")
      (lambda () 1))
