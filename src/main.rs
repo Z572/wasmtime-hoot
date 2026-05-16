@@ -481,13 +481,17 @@ fn ffi_procedure_to_extern(
     todo!()
 }
 fn rt_bignum_rem(
-    _caller: Caller<'_, HootStatus>,
-    _param: Rooted<ExternRef>,
-    _b: Rooted<ExternRef>,
+    caller: Caller<'_, HootStatus>,
+    a: Rooted<ExternRef>,
+    b: Rooted<ExternRef>,
 ) -> Result<Rooted<ExternRef>> {
-    trace!("bignum_rem");
-    todo!()
+    let a_int: BigInt = extern_ref_to_bigint(a, &caller)?;
+    let b_int: BigInt = extern_ref_to_bigint(b, &caller)?;
+    let ret = &a_int % &b_int;
+    trace!("bignum_rem {:?} {:?} ret: {:?}", &a_int, &b_int, &ret);
+    ExternRef::new(caller, ret)
 }
+
 fn rt_bignum_logior_i32(
     _caller: Caller<'_, HootStatus>,
     _a: Rooted<ExternRef>,
