@@ -47,10 +47,7 @@ struct Runtime {
 
 impl Runtime {
     fn new(config: Option<Config>) -> Result<Self> {
-        let mut config: Config = match config {
-            Some(x) => x,
-            None => Config::default(),
-        };
+        let mut config: Config = config.unwrap_or_default();
         config.wasm_gc(true);
         config.wasm_tail_call(true);
         config.wasm_backtrace(true);
@@ -66,14 +63,14 @@ impl Runtime {
 }
 
 fn extern_ref_to_bigint(c: Rooted<ExternRef>, caller: &Caller<'_, HootStatus>) -> Result<BigInt> {
-    let cc = c.data(&caller)?.expect("wtf");
+    let cc = c.data(caller)?.expect("wtf");
     let nu = cc
         .downcast_ref::<BigInt>()
         .ok_or_else(|| anyhow::anyhow!("externref is not bignum!"))?;
     Ok(nu.clone())
 }
 fn extern_ref_to_string(c: Rooted<ExternRef>, caller: &Caller<'_, HootStatus>) -> Result<String> {
-    let cc = c.data(&caller)?.expect("wtf");
+    let cc = c.data(caller)?.expect("wtf");
     let nu = cc
         .downcast_ref::<String>()
         .ok_or_else(|| anyhow::anyhow!("externref is not string!"))?;
@@ -206,7 +203,7 @@ fn rt_bignum_get_i64(caller: Caller<'_, HootStatus>, param: Rooted<ExternRef>) -
             i64::MAX
         }
     });
-    return Ok(out);
+    Ok(out)
 }
 
 fn rt_bignum_mul(
@@ -250,7 +247,7 @@ fn rt_bignum_quo(
     trace!("bignum_quo");
     let a_int = extern_ref_to_bigint(a, &caller)?;
     let b_int = extern_ref_to_bigint(b, &caller)?;
-    ExternRef::new(caller, BigInt::from(a_int / b_int))
+    ExternRef::new(caller, a_int / b_int)
 }
 
 fn rt_quit(_caller: Caller<'_, HootStatus>, a: i32) -> Result<()> {
@@ -355,7 +352,7 @@ fn debug_code_name(caller: Caller<'_, HootStatus>, _param: Func) -> Option<Roote
     trace!("code_name");
     let aaa: String = "TODO_debug::code_name".into();
     let cc = ExternRef::new(caller, aaa).unwrap();
-    Some(cc.clone())
+    Some(cc)
 }
 
 fn rt_make_regexp(
@@ -793,7 +790,7 @@ fn main() -> Result<()> {
         };
         let rt_string_to_wtf8_result_val_ty = rt_string_to_wtf8_func_ty
             .results()
-            .nth(0)
+            .next()
             .ok_or_else(|| anyhow!("missing result"))?
             .clone();
 
@@ -863,8 +860,7 @@ fn main() -> Result<()> {
                                 }
                             }
                         }
-                        let s = String::from_utf8(bytes)?;
-                        s
+                        String::from_utf8(bytes)?
                     }
                     _ => todo!(),
                 };
