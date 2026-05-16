@@ -175,6 +175,20 @@ fn io_file_buffer_ref(
     trace!("file_buffer_ref");
     todo!()
 }
+fn io_file_buffer_set(
+    _caller: Caller<'_, HootStatus>,
+    _a: Rooted<ExternRef>,
+    _b: i32,
+    _c: i32,
+) -> Result<()> {
+    trace!("file_buffer_set");
+    todo!()
+}
+
+fn io_file_buffer_size(_caller: Caller<'_, HootStatus>, _a: Rooted<ExternRef>) -> Result<i32> {
+    trace!("file_buffer_size");
+    todo!()
+}
 
 fn rt_bignum_is_i64(caller: Caller<'_, HootStatus>, param: Rooted<ExternRef>) -> Result<i32> {
     trace!("bignum_is_i64");
@@ -285,6 +299,29 @@ fn io_open_input_file(
     trace!("open_input_file");
     todo!()
 }
+
+fn io_open_output_file(
+    _caller: Caller<'_, HootStatus>,
+    _a: Rooted<ExternRef>,
+) -> Result<Rooted<ExternRef>> {
+    trace!("open_output_file");
+    todo!()
+}
+fn io_file_exists(_caller: Caller<'_, HootStatus>, _a: Rooted<ExternRef>) -> Result<i32> {
+    trace!("io_file_exists");
+    todo!()
+}
+
+fn io_delete_file(_caller: Caller<'_, HootStatus>, _a: Rooted<ExternRef>) -> Result<()> {
+    trace!("io_delete_file");
+    todo!()
+}
+
+fn io_write_file(_caller: Caller<'_, HootStatus>, _a: Rooted<ExternRef>, _b: i32) -> Result<i32> {
+    trace!("io_write_file");
+    todo!()
+}
+
 fn rt_string_upcase(
     caller: Caller<'_, HootStatus>,
     a: Rooted<ExternRef>,
@@ -483,6 +520,11 @@ fn rt_bignum_is_u64(caller: Caller<'_, HootStatus>, a: Rooted<ExternRef>) -> Res
     Ok(bool_to_i32(a_int.to_u64().is_some()))
 }
 
+fn ffi_is_extern_func(caller: Caller<'_, HootStatus>, _c: Rooted<ExternRef>) -> Result<i32> {
+    trace!("ffi_is_extern_func: {:?}", caller.data());
+    todo!()
+}
+
 fn ffi_procedure_to_extern(
     caller: Caller<'_, HootStatus>,
     _c: Rooted<EqRef>,
@@ -490,6 +532,16 @@ fn ffi_procedure_to_extern(
     trace!("ffi_procedure_to_extern: {:?}", caller.data());
     todo!()
 }
+
+fn ffi_call_extern(
+    caller: Caller<'_, HootStatus>,
+    _a: Rooted<ExternRef>,
+    _b: Rooted<EqRef>,
+) -> Result<Rooted<EqRef>> {
+    trace!("ffi_call_extern: {:?}", caller.data());
+    todo!()
+}
+
 fn rt_bignum_rem(
     caller: Caller<'_, HootStatus>,
     a: Rooted<ExternRef>,
@@ -553,7 +605,16 @@ fn debug_debug_str_i32(_caller: Caller<'_, HootStatus>, _param: i32) -> Result<(
     trace!("debug_str_i32");
     todo!();
 }
-fn debug_debug_str_scm(_caller: Caller<'_, HootStatus>, _param: i32) -> Result<()> {
+fn debug_debug_str(_caller: Caller<'_, HootStatus>, _a: Rooted<ExternRef>) -> Result<()> {
+    trace!("debug_str");
+    todo!();
+}
+
+fn debug_debug_str_scm(
+    _caller: Caller<'_, HootStatus>,
+    _a: Rooted<ExternRef>,
+    _b: Rooted<EqRef>,
+) -> Result<()> {
     trace!("debug_str_scm");
     todo!();
 }
@@ -641,6 +702,39 @@ fn rt_make_weak_ref(
     trace!("make_weak_ref");
     todo!();
 }
+
+fn rt_weak_map_set(
+    _caller: Caller<'_, HootStatus>,
+    _a: Rooted<ExternRef>,
+    _b: Rooted<EqRef>,
+    _c: Rooted<EqRef>,
+) -> Result<()> {
+    trace!("rt_weak_map_set");
+    todo!();
+}
+
+fn rt_weak_map_get(
+    _caller: Caller<'_, HootStatus>,
+    _a: Rooted<ExternRef>,
+    _b: Rooted<EqRef>,
+    _c: Rooted<EqRef>,
+) -> Result<Rooted<EqRef>> {
+    trace!("rt_weak_map_get");
+    todo!();
+}
+
+fn rt_current_second(_caller: Caller<'_, HootStatus>) -> Result<f64> {
+    trace!("rt_current_second");
+    todo!();
+}
+fn rt_current_jiffy(_caller: Caller<'_, HootStatus>) -> Result<f64> {
+    trace!("rt_current_jiffy");
+    todo!();
+}
+fn rt_jiffies_per_second(_caller: Caller<'_, HootStatus>) -> Result<i32> {
+    trace!("rt_jiffies_per_second");
+    todo!();
+}
 fn rt_regexp_exec(
     _caller: Caller<'_, HootStatus>,
     _a: Rooted<ExternRef>,
@@ -657,6 +751,20 @@ fn rt_regexp_match_string(
     todo!()
 }
 
+fn rt_ftodo(_caller: Caller<'_, HootStatus>, _a: f64) -> Result<f64> {
+    trace!("a TODO fn");
+    todo!()
+}
+
+fn rt_fatan2(_caller: Caller<'_, HootStatus>, _a: f64, _b: f64) -> Result<f64> {
+    trace!("rt_fatan2");
+    todo!()
+}
+
+fn rt_bignum_logcount(_caller: Caller<'_, HootStatus>, _a: Rooted<ExternRef>) -> Result<i32> {
+    trace!("rt_bignum_logcount");
+    todo!()
+}
 fn init_trace() {
     let _ = tracing_subscriber::fmt()
         .with_env_filter(
@@ -771,15 +879,24 @@ fn main() -> Result<()> {
 
     linker.func_wrap("debug", "code_name", debug_code_name)?;
     linker.func_wrap("debug", "code_source", debug_code_source)?;
+    linker.func_wrap("debug", "debug_str", debug_debug_str)?;
     linker.func_wrap("debug", "debug_str_i32", debug_debug_str_i32)?;
     linker.func_wrap("debug", "debug_str_scm", debug_debug_str_scm)?;
 
+    linker.func_wrap("ffi", "call_extern", ffi_call_extern)?;
+    linker.func_wrap("ffi", "is_extern_func", ffi_is_extern_func)?;
     linker.func_wrap("ffi", "procedure_to_extern", ffi_procedure_to_extern)?;
 
     linker.func_wrap("io", "close_file", io_close_file)?;
     linker.func_wrap("io", "file_buffer_ref", io_file_buffer_ref)?;
+    linker.func_wrap("io", "file_buffer_set", io_file_buffer_set)?;
+    linker.func_wrap("io", "file_buffer_size", io_file_buffer_size)?;
     linker.func_wrap("io", "file_random_access", io_file_random_access)?;
     linker.func_wrap("io", "open_input_file", io_open_input_file)?;
+    linker.func_wrap("io", "open_output_file", io_open_output_file)?;
+    linker.func_wrap("io", "file_exists", io_file_exists)?;
+    linker.func_wrap("io", "delete_file", io_delete_file)?;
+    linker.func_wrap("io", "write_file", io_write_file)?;
     linker.func_wrap("io", "read_file", io_read_file)?;
     linker.func_wrap("io", "read_stdin", io_read_stdin)?;
     linker.func_wrap("io", "seek_file", io_seek_file)?;
@@ -803,6 +920,7 @@ fn main() -> Result<()> {
     linker.func_wrap("rt", "bignum_le_f64_big", rt_bignum_le_f64_big)?;
     linker.func_wrap("rt", "bignum_logand", rt_bignum_logand)?;
     linker.func_wrap("rt", "bignum_logand_i32", rt_bignum_logand_i32)?;
+    linker.func_wrap("rt", "bignum_logcount", rt_bignum_logcount)?;
     linker.func_wrap("rt", "bignum_logior", rt_bignum_logior)?;
     linker.func_wrap("rt", "bignum_logior_i32", rt_bignum_logior_i32)?;
     linker.func_wrap("rt", "bignum_logxor", rt_bignum_logxor)?;
@@ -823,8 +941,20 @@ fn main() -> Result<()> {
     linker.func_wrap("rt", "bignum_sub", rt_bignum_sub)?;
     linker.func_wrap("rt", "bignum_sub_i32", rt_bignum_sub_i32)?;
     linker.func_wrap("rt", "bignum_to_f64", rt_bignum_to_f64)?;
+    linker.func_wrap("rt", "current_jiffy", rt_current_jiffy)?;
+    linker.func_wrap("rt", "current_second", rt_current_second)?;
     linker.func_wrap("rt", "die", rt_die)?;
+    linker.func_wrap("rt", "facos", rt_ftodo)?;
+    linker.func_wrap("rt", "fasin", rt_ftodo)?;
+    linker.func_wrap("rt", "fatan", rt_ftodo)?;
+    linker.func_wrap("rt", "fatan2", rt_fatan2)?;
+    linker.func_wrap("rt", "fcos", rt_ftodo)?;
+    linker.func_wrap("rt", "fexp", rt_ftodo)?;
+    linker.func_wrap("rt", "flog", rt_ftodo)?;
     linker.func_wrap("rt", "flonum_to_string", rt_flonum_to_string)?;
+    linker.func_wrap("rt", "fsin", rt_ftodo)?;
+    linker.func_wrap("rt", "ftan", rt_ftodo)?;
+    linker.func_wrap("rt", "jiffies_per_second", rt_jiffies_per_second)?;
     linker.func_wrap("rt", "make_regexp", rt_make_regexp)?;
     linker.func_wrap("rt", "make_weak_map", rt_make_weak_map)?;
     linker.func_wrap("rt", "make_weak_ref", rt_make_weak_ref)?;
@@ -837,8 +967,10 @@ fn main() -> Result<()> {
     linker.func_wrap("rt", "regexp_match_substring", rt_regexp_match_substring)?;
     linker.func_wrap("rt", "stream_make_chunk", rt_stream_make_chunk)?;
     linker.func_wrap("rt", "stream_read", rt_stream_read)?;
-    linker.func_wrap("rt", "string_upcase", rt_string_upcase)?;
     linker.func_wrap("rt", "string_downcase", rt_string_downcase)?;
+    linker.func_wrap("rt", "string_upcase", rt_string_upcase)?;
+    linker.func_wrap("rt", "weak_map_get", rt_weak_map_get)?;
+    linker.func_wrap("rt", "weak_map_set", rt_weak_map_set)?;
     linker.func_wrap("rt", "weak_ref_deref", rt_weak_ref_deref)?;
     linker.func_wrap(
         "finalization",
