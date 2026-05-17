@@ -1,6 +1,8 @@
 use anyhow::{Ok, Result, anyhow, bail};
 use clap::Parser;
 use core::convert::Into;
+use core::fmt::Debug;
+use core::option::Option;
 use core::{clone::Clone, iter::Iterator, todo};
 use num_bigint::BigInt;
 use num_integer::Integer;
@@ -42,15 +44,19 @@ fn bool_to_i32(b: bool) -> i32 {
 }
 
 #[derive(Default, Debug)]
-struct Runtime {
+struct Runtime<T: 'static> {
     engine: Engine,
-    linker: Linker<HootStatus>,
-    store: Store<HootStatus>,
+    linker: Linker<T>,
+    store: Store<T>,
 }
 
-impl Runtime {
-    fn new(config: Option<Config>) -> Result<Self> {
+impl<T> Runtime<T>
+where
+    T: Default + Debug + 'static,
+{
+    fn new(config: Option<Config>, status: Option<T>) -> Result<Self> {
         let mut config: Config = config.unwrap_or_default();
+        let status: T = status.unwrap_or_default();
         config.wasm_backtrace(true);
         config.wasm_exceptions(true);
         config.wasm_function_references(true);
@@ -60,7 +66,7 @@ impl Runtime {
         config.wasm_tail_call(true);
         let engine = Engine::new(&config)?;
         let linker = Linker::new(&engine);
-        let store = Store::new(&engine, HootStatus::new(30));
+        let store = Store::new(&engine, status);
         Ok(Self {
             engine,
             linker,
@@ -162,7 +168,6 @@ impl Runtime {
         Ok(())
     }
     fn register_debug_funcs(&mut self) -> Result<()> {
-        // linker: &mut Linker<HootStatus>
         self.linker
             .func_wrap("debug", "code_name", debug_code_name)?;
         self.linker
@@ -406,14 +411,14 @@ impl Runtime {
     }
 }
 
-fn extern_ref_to_bigint(c: Rooted<ExternRef>, caller: &Caller<'_, HootStatus>) -> Result<BigInt> {
+fn extern_ref_to_bigint<T>(c: Rooted<ExternRef>, caller: &Caller<'_, T>) -> Result<BigInt> {
     let cc = c.data(caller)?.expect("wtf");
     let nu = cc
         .downcast_ref::<BigInt>()
         .ok_or_else(|| anyhow::anyhow!("externref is not bignum!"))?;
     Ok(nu.clone())
 }
-fn extern_ref_to_string(c: Rooted<ExternRef>, caller: &Caller<'_, HootStatus>) -> Result<String> {
+fn extern_ref_to_string<T>(c: Rooted<ExternRef>, caller: &Caller<'_, T>) -> Result<String> {
     let cc = c.data(caller)?.expect("wtf");
     let nu = cc
         .downcast_ref::<String>()
@@ -421,26 +426,21 @@ fn extern_ref_to_string(c: Rooted<ExternRef>, caller: &Caller<'_, HootStatus>) -
     Ok(nu.clone())
 }
 
-fn io_read_file(_caller: Caller<'_, HootStatus>, _a: Rooted<ExternRef>, _b: i32) -> Result<i32> {
+fn io_read_file<T>(_caller: Caller<'_, T>, _a: Rooted<ExternRef>, _b: i32) -> Result<i32> {
     trace!("read_file");
     todo!()
 }
 
-fn io_close_file(_caller: Caller<'_, HootStatus>, _a: Rooted<ExternRef>) -> Result<()> {
+fn io_close_file<T>(_caller: Caller<'_, T>, _a: Rooted<ExternRef>) -> Result<()> {
     trace!("close_file");
     todo!()
 }
-fn io_seek_file(
-    _caller: Caller<'_, HootStatus>,
-    _a: Rooted<ExternRef>,
-    _b: i32,
-    _c: i32,
-) -> Result<i32> {
+fn io_seek_file<T>(_caller: Caller<'_, T>, _a: Rooted<ExternRef>, _b: i32, _c: i32) -> Result<i32> {
     trace!("seek_file");
     todo!()
 }
 
-fn io_read_stdin(caller: Caller<'_, HootStatus>) -> Result<Rooted<ExternRef>> {
+fn io_read_stdin<T>(caller: Caller<'_, T>) -> Result<Rooted<ExternRef>> {
     trace!("read_stdin");
     let mut input = String::new();
     let n = io::stdin().read_line(&mut input)?;
@@ -455,35 +455,35 @@ fn io_read_stdin(caller: Caller<'_, HootStatus>) -> Result<Rooted<ExternRef>> {
         },
     )
 }
-fn io_file_random_access(_caller: Caller<'_, HootStatus>, _a: Rooted<ExternRef>) -> Result<i32> {
+fn io_file_random_access<T>(_caller: Caller<'_, T>, _a: Rooted<ExternRef>) -> Result<i32> {
     trace!("file_random_access");
     todo!()
 }
-fn rt_flonum_to_string(_caller: Caller<'_, HootStatus>, _param: f64) -> Result<Rooted<ExternRef>> {
+fn rt_flonum_to_string<T>(_caller: Caller<'_, T>, _param: f64) -> Result<Rooted<ExternRef>> {
     trace!("flonum_to_string");
     todo!()
 }
-fn rt_bignum_from_u64(caller: Caller<'_, HootStatus>, param: i64) -> Result<Rooted<ExternRef>> {
+fn rt_bignum_from_u64<T>(caller: Caller<'_, T>, param: i64) -> Result<Rooted<ExternRef>> {
     trace!("bignum_from_u64 {:?}", param);
     let num: u64 = param as u64;
     ExternRef::new(caller, BigInt::from(num))
 }
-fn rt_bignum_from_i64(caller: Caller<'_, HootStatus>, param: i64) -> Result<Rooted<ExternRef>> {
+fn rt_bignum_from_i64<T>(caller: Caller<'_, T>, param: i64) -> Result<Rooted<ExternRef>> {
     trace!("bignum_from_i64 {:?} {:?}", param, BigInt::from(param));
     ExternRef::new(caller, BigInt::from(param))
 }
-fn rt_bignum_from_u32(caller: Caller<'_, HootStatus>, param: u32) -> Result<Rooted<ExternRef>> {
+fn rt_bignum_from_u32<T>(caller: Caller<'_, T>, param: u32) -> Result<Rooted<ExternRef>> {
     trace!("bignum_from_u32");
     ExternRef::new(caller, BigInt::from(param))
 }
 
-fn rt_bignum_from_i32(caller: Caller<'_, HootStatus>, param: i32) -> Result<Rooted<ExternRef>> {
+fn rt_bignum_from_i32<T>(caller: Caller<'_, T>, param: i32) -> Result<Rooted<ExternRef>> {
     trace!("bignum_from_i32");
     ExternRef::new(caller, BigInt::from(param))
 }
 
-fn rt_bignum_sub(
-    caller: Caller<'_, HootStatus>,
+fn rt_bignum_sub<T>(
+    caller: Caller<'_, T>,
     a: Rooted<ExternRef>,
     _b: Rooted<ExternRef>,
 ) -> Result<Rooted<ExternRef>> {
@@ -493,8 +493,8 @@ fn rt_bignum_sub(
     ExternRef::new(caller, a_int - b_int)
 }
 
-fn rt_bignum_sub_i32(
-    caller: Caller<'_, HootStatus>,
+fn rt_bignum_sub_i32<T>(
+    caller: Caller<'_, T>,
     a: Rooted<ExternRef>,
     b: i32,
 ) -> Result<Rooted<ExternRef>> {
@@ -504,20 +504,16 @@ fn rt_bignum_sub_i32(
     ExternRef::new(caller, result)
 }
 
-fn rt_die(_caller: Caller<'_, HootStatus>, _param: Rooted<ExternRef>, _eq: Rooted<EqRef>) {
+fn rt_die<T>(_caller: Caller<'_, T>, _param: Rooted<ExternRef>, _eq: Rooted<EqRef>) {
     trace!("die");
 }
 
-fn io_file_buffer_ref(
-    _caller: Caller<'_, HootStatus>,
-    _a: Rooted<ExternRef>,
-    _b: i32,
-) -> Result<i32> {
+fn io_file_buffer_ref<T>(_caller: Caller<'_, T>, _a: Rooted<ExternRef>, _b: i32) -> Result<i32> {
     trace!("file_buffer_ref");
     todo!()
 }
-fn io_file_buffer_set(
-    _caller: Caller<'_, HootStatus>,
+fn io_file_buffer_set<T>(
+    _caller: Caller<'_, T>,
     _a: Rooted<ExternRef>,
     _b: i32,
     _c: i32,
@@ -526,17 +522,17 @@ fn io_file_buffer_set(
     todo!()
 }
 
-fn io_file_buffer_size(_caller: Caller<'_, HootStatus>, _a: Rooted<ExternRef>) -> Result<i32> {
+fn io_file_buffer_size<T>(_caller: Caller<'_, T>, _a: Rooted<ExternRef>) -> Result<i32> {
     trace!("file_buffer_size");
     todo!()
 }
 
-fn rt_bignum_is_i64(caller: Caller<'_, HootStatus>, param: Rooted<ExternRef>) -> Result<i32> {
+fn rt_bignum_is_i64<T>(caller: Caller<'_, T>, param: Rooted<ExternRef>) -> Result<i32> {
     trace!("bignum_is_i64");
     let nu = extern_ref_to_bigint(param, &caller)?;
     Ok(bool_to_i32(nu.to_i64().is_some()))
 }
-fn rt_bignum_get_i64(caller: Caller<'_, HootStatus>, param: Rooted<ExternRef>) -> Result<i64> {
+fn rt_bignum_get_i64<T>(caller: Caller<'_, T>, param: Rooted<ExternRef>) -> Result<i64> {
     trace!("bignum_get_i64");
     let nu = extern_ref_to_bigint(param, &caller)?;
 
@@ -550,8 +546,8 @@ fn rt_bignum_get_i64(caller: Caller<'_, HootStatus>, param: Rooted<ExternRef>) -
     Ok(out)
 }
 
-fn rt_bignum_mul(
-    caller: Caller<'_, HootStatus>,
+fn rt_bignum_mul<T>(
+    caller: Caller<'_, T>,
     a: Rooted<ExternRef>,
     b: Rooted<ExternRef>,
 ) -> Result<Rooted<ExternRef>> {
@@ -561,8 +557,8 @@ fn rt_bignum_mul(
     ExternRef::new(caller, a_int * b_int)
 }
 
-fn rt_bignum_mul_i32(
-    caller: Caller<'_, HootStatus>,
+fn rt_bignum_mul_i32<T>(
+    caller: Caller<'_, T>,
     a: Rooted<ExternRef>,
     b: i32,
 ) -> Result<Rooted<ExternRef>> {
@@ -571,8 +567,8 @@ fn rt_bignum_mul_i32(
     trace!("bignum_mul_i32 {:?} {:?} {:?}", &a_int, &b, &ret);
     ExternRef::new(caller, ret)
 }
-fn rt_bignum_gcd(
-    caller: Caller<'_, HootStatus>,
+fn rt_bignum_gcd<T>(
+    caller: Caller<'_, T>,
     a: Rooted<ExternRef>,
     b: Rooted<ExternRef>,
 ) -> Result<Rooted<ExternRef>> {
@@ -583,8 +579,8 @@ fn rt_bignum_gcd(
     ExternRef::new(caller, ret)
 }
 
-fn rt_bignum_quo(
-    caller: Caller<'_, HootStatus>,
+fn rt_bignum_quo<T>(
+    caller: Caller<'_, T>,
     a: Rooted<ExternRef>,
     b: Rooted<ExternRef>,
 ) -> Result<Rooted<ExternRef>> {
@@ -594,21 +590,17 @@ fn rt_bignum_quo(
     ExternRef::new(caller, a_int / b_int)
 }
 
-fn rt_quit(_caller: Caller<'_, HootStatus>, a: i32) -> Result<()> {
+fn rt_quit<T>(_caller: Caller<'_, T>, a: i32) -> Result<()> {
     trace!("quit {:?}", a);
     exit(a);
 }
-fn rt_stream_make_chunk(
-    caller: Caller<'_, HootStatus>,
-    _a: i32,
-    _b: i64,
-) -> Result<Rooted<ExternRef>> {
+fn rt_stream_make_chunk<T>(caller: Caller<'_, T>, _a: i32, _b: i64) -> Result<Rooted<ExternRef>> {
     trace!("stream_make_chunk");
     ExternRef::new(caller, "")
 }
 
-fn rt_bignum_logxor_i32(
-    _caller: Caller<'_, HootStatus>,
+fn rt_bignum_logxor_i32<T>(
+    _caller: Caller<'_, T>,
     _a: Rooted<ExternRef>,
     _param: i32,
 ) -> Result<Rooted<ExternRef>> {
@@ -616,7 +608,7 @@ fn rt_bignum_logxor_i32(
     todo!()
 }
 
-fn io_write_stdout(caller: Caller<'_, HootStatus>, string: Rooted<ExternRef>) -> Result<()> {
+fn io_write_stdout<T>(caller: Caller<'_, T>, string: Rooted<ExternRef>) -> Result<()> {
     let nu = extern_ref_to_string(string, &caller)?;
     trace!("write_stdout {:?}", &nu);
     let mut stdout = io::stdout().lock();
@@ -624,7 +616,7 @@ fn io_write_stdout(caller: Caller<'_, HootStatus>, string: Rooted<ExternRef>) ->
     stdout.flush()?;
     Ok(())
 }
-fn io_write_stderr(caller: Caller<'_, HootStatus>, string: Rooted<ExternRef>) -> Result<()> {
+fn io_write_stderr<T>(caller: Caller<'_, T>, string: Rooted<ExternRef>) -> Result<()> {
     let nu = extern_ref_to_string(string, &caller)?;
     trace!("write_stderr {:?}", &nu);
     let mut stderr = io::stderr().lock();
@@ -633,40 +625,37 @@ fn io_write_stderr(caller: Caller<'_, HootStatus>, string: Rooted<ExternRef>) ->
     Ok(())
 }
 
-fn io_open_input_file(
-    _caller: Caller<'_, HootStatus>,
+fn io_open_input_file<T>(
+    _caller: Caller<'_, T>,
     _a: Rooted<ExternRef>,
 ) -> Result<Option<Rooted<ExternRef>>> {
     trace!("open_input_file");
     todo!()
 }
 
-fn io_open_output_file(
-    _caller: Caller<'_, HootStatus>,
+fn io_open_output_file<T>(
+    _caller: Caller<'_, T>,
     _a: Rooted<ExternRef>,
 ) -> Result<Rooted<ExternRef>> {
     trace!("open_output_file");
     todo!()
 }
-fn io_file_exists(_caller: Caller<'_, HootStatus>, _a: Rooted<ExternRef>) -> Result<i32> {
+fn io_file_exists<T>(_caller: Caller<'_, T>, _a: Rooted<ExternRef>) -> Result<i32> {
     trace!("io_file_exists");
     todo!()
 }
 
-fn io_delete_file(_caller: Caller<'_, HootStatus>, _a: Rooted<ExternRef>) -> Result<()> {
+fn io_delete_file<T>(_caller: Caller<'_, T>, _a: Rooted<ExternRef>) -> Result<()> {
     trace!("io_delete_file");
     todo!()
 }
 
-fn io_write_file(_caller: Caller<'_, HootStatus>, _a: Rooted<ExternRef>, _b: i32) -> Result<i32> {
+fn io_write_file<T>(_caller: Caller<'_, T>, _a: Rooted<ExternRef>, _b: i32) -> Result<i32> {
     trace!("io_write_file");
     todo!()
 }
 
-fn rt_string_upcase(
-    caller: Caller<'_, HootStatus>,
-    a: Rooted<ExternRef>,
-) -> Result<Rooted<ExternRef>> {
+fn rt_string_upcase<T>(caller: Caller<'_, T>, a: Rooted<ExternRef>) -> Result<Rooted<ExternRef>> {
     let c: String = extern_ref_to_string(a, &caller)?;
     let ret = c.to_uppercase();
 
@@ -674,78 +663,75 @@ fn rt_string_upcase(
     ExternRef::new(caller, ret)
 }
 
-fn rt_string_downcase(
-    caller: Caller<'_, HootStatus>,
-    a: Rooted<ExternRef>,
-) -> Result<Rooted<ExternRef>> {
+fn rt_string_downcase<T>(caller: Caller<'_, T>, a: Rooted<ExternRef>) -> Result<Rooted<ExternRef>> {
     let c: String = extern_ref_to_string(a, &caller)?;
     let ret = c.to_lowercase();
     trace!("string_downcase {:?}", &ret);
     ExternRef::new(caller, ret)
 }
 
-fn rt_stream_read(
-    _caller: Caller<'_, HootStatus>,
+fn rt_stream_read<T>(
+    _caller: Caller<'_, T>,
     _param: Rooted<ExternRef>,
 ) -> Result<Rooted<ExternRef>> {
     trace!("stream_read");
     todo!();
 }
 
-fn debug_code_name(caller: Caller<'_, HootStatus>, _param: Func) -> Option<Rooted<ExternRef>> {
+fn debug_code_name<T>(caller: Caller<'_, T>, _param: Func) -> Option<Rooted<ExternRef>> {
     trace!("code_name");
     let aaa: String = "TODO_debug::code_name".into();
     let cc = ExternRef::new(caller, aaa).unwrap();
     Some(cc)
 }
 
-fn rt_make_regexp(
-    _caller: Caller<'_, HootStatus>,
+fn rt_make_regexp<T>(
+    _caller: Caller<'_, T>,
     _param: Rooted<ExternRef>,
     _b: Rooted<ExternRef>,
 ) -> Result<Rooted<ExternRef>> {
     trace!("make_regexp");
     todo!()
 }
-fn rt_regexp_match_start(_caller: Caller<'_, HootStatus>, _a: Rooted<ExternRef>) -> i32 {
+fn rt_regexp_match_start<T>(_caller: Caller<'_, T>, _a: Rooted<ExternRef>) -> i32 {
     trace!("regexp_match_start");
     todo!()
 }
-fn rt_weak_ref_deref(
-    _caller: Caller<'_, HootStatus>,
+fn rt_weak_ref_deref<T>(
+    _caller: Caller<'_, T>,
     _a: Rooted<ExternRef>,
     _b: Rooted<EqRef>,
 ) -> Result<Rooted<EqRef>> {
     trace!("weak_ref_deref");
     todo!()
 }
-fn rt_bignum_logxor(
-    _caller: Caller<'_, HootStatus>,
+fn rt_bignum_logxor<T>(
+    _caller: Caller<'_, T>,
     _a: Rooted<ExternRef>,
     _b: Rooted<ExternRef>,
 ) -> Result<Rooted<ExternRef>> {
     trace!("bignum_logxor");
     todo!()
 }
-fn rt_bignum_mod(
-    _caller: Caller<'_, HootStatus>,
+fn rt_bignum_mod<T>(
+    _caller: Caller<'_, T>,
     _a: Rooted<ExternRef>,
     _b: Rooted<ExternRef>,
 ) -> Result<Rooted<ExternRef>> {
     trace!("bignum_mod");
     todo!()
 }
-fn rt_bignum_to_f64(_caller: Caller<'_, HootStatus>, _a: Rooted<ExternRef>) -> f64 {
+fn rt_bignum_to_f64<T>(_caller: Caller<'_, T>, _a: Rooted<ExternRef>) -> f64 {
     trace!("bignum_to_f64");
     todo!()
 }
-fn rt_bignum_eq_f64(caller: Caller<'_, HootStatus>, a: Rooted<ExternRef>, _b: f64) -> Result<i32> {
+fn rt_bignum_eq_f64<T>(caller: Caller<'_, T>, a: Rooted<ExternRef>, _b: f64) -> Result<i32> {
     trace!("bignum_eq_f64");
     let _a_int = extern_ref_to_bigint(a, &caller)?;
     todo!()
 }
-fn rt_bignum_eq(
-    caller: Caller<'_, HootStatus>,
+fn rt_bignum_eq<T>(
+    caller: Caller<'_, T>,
     a: Rooted<ExternRef>,
     b: Rooted<ExternRef>,
 ) -> Result<i32> {
@@ -755,8 +741,8 @@ fn rt_bignum_eq(
     Ok(bool_to_i32(a_int == b_int))
 }
 
-fn rt_bignum_rsh(
-    caller: Caller<'_, HootStatus>,
+fn rt_bignum_rsh<T>(
+    caller: Caller<'_, T>,
     a: Rooted<ExternRef>,
     b: i64,
 ) -> Result<Rooted<ExternRef>> {
@@ -766,29 +752,29 @@ fn rt_bignum_rsh(
     ExternRef::new(caller, ret)
 }
 
-fn rt_bignum_logand(
-    caller: Caller<'_, HootStatus>,
+fn rt_bignum_logand<T>(
+    caller: Caller<'_, T>,
     _param: Rooted<ExternRef>,
     _b: Rooted<ExternRef>,
 ) -> Result<Rooted<ExternRef>> {
     trace!("bignum_logand");
     ExternRef::new(caller, "")
 }
-fn rt_bignum_logand_i32(
-    caller: Caller<'_, HootStatus>,
+fn rt_bignum_logand_i32<T>(
+    caller: Caller<'_, T>,
     _a: Rooted<ExternRef>,
     _param: i32,
 ) -> Result<Rooted<ExternRef>> {
     trace!("bignum_logand_i32");
     ExternRef::new(caller, "")
 }
-fn rt_bignum_lt_big_f64(_caller: Caller<'_, HootStatus>, _b: Rooted<ExternRef>, _c: f64) -> i32 {
+fn rt_bignum_lt_big_f64<T>(_caller: Caller<'_, T>, _b: Rooted<ExternRef>, _c: f64) -> i32 {
     trace!("bignum_lt_big_f64");
     todo!()
 }
 
-fn finalization_finalization_registry_register(
-    _caller: Caller<'_, HootStatus>,
+fn finalization_finalization_registry_register<T>(
+    _caller: Caller<'_, T>,
     _a: Rooted<ExternRef>,
     _b: Rooted<EqRef>,
     _c: Rooted<EqRef>,
@@ -797,24 +783,20 @@ fn finalization_finalization_registry_register(
     todo!()
 }
 
-fn rt_bignum_lt_f64_big(
-    _caller: Caller<'_, HootStatus>,
+fn rt_bignum_lt_f64_big<T>(
+    _caller: Caller<'_, T>,
     _c: f64,
     _param: Rooted<ExternRef>,
 ) -> Result<i32> {
     trace!("bignum_lt_f64_big");
     todo!()
 }
-fn rt_bignum_le_f64_big(
-    _caller: Caller<'_, HootStatus>,
-    _b: f64,
-    _param: Rooted<ExternRef>,
-) -> i32 {
+fn rt_bignum_le_f64_big<T>(_caller: Caller<'_, T>, _b: f64, _param: Rooted<ExternRef>) -> i32 {
     trace!("bignum_le_f64_big");
     todo!()
 }
-fn rt_bignum_lsh_i32_i64(
-    caller: Caller<'_, HootStatus>,
+fn rt_bignum_lsh_i32_i64<T>(
+    caller: Caller<'_, T>,
     param: i32,
     b: i64,
 ) -> Result<Rooted<ExternRef>> {
@@ -823,21 +805,13 @@ fn rt_bignum_lsh_i32_i64(
     trace!("bignum_lsh_i32_i64 {:?}", &c);
     ExternRef::new(caller, c)
 }
-fn rt_bignum_lt_i32_big(
-    caller: Caller<'_, HootStatus>,
-    a: i32,
-    b: Rooted<ExternRef>,
-) -> Result<i32> {
+fn rt_bignum_lt_i32_big<T>(caller: Caller<'_, T>, a: i32, b: Rooted<ExternRef>) -> Result<i32> {
     let b_int = extern_ref_to_bigint(b, &caller)?;
     trace!("bignum_lt_i32_big");
     Ok(bool_to_i32(BigInt::from(a) < b_int))
 }
 
-fn rt_bignum_le_big_f64(
-    caller: Caller<'_, HootStatus>,
-    a: Rooted<ExternRef>,
-    b: f64,
-) -> Result<i32> {
+fn rt_bignum_le_big_f64<T>(caller: Caller<'_, T>, a: Rooted<ExternRef>, b: f64) -> Result<i32> {
     let a_int = extern_ref_to_bigint(a, &caller)?;
     trace!("bignum_le_big_f64");
     let a_f64 = a_int
@@ -846,48 +820,53 @@ fn rt_bignum_le_big_f64(
 
     Ok(bool_to_i32(a_f64 <= b))
 }
-fn rt_bignum_lt_big_i32(
-    caller: Caller<'_, HootStatus>,
-    a: Rooted<ExternRef>,
-    b: i32,
-) -> Result<i32> {
+fn rt_bignum_lt_big_i32<T>(caller: Caller<'_, T>, a: Rooted<ExternRef>, b: i32) -> Result<i32> {
     trace!("bignum_lt_big_i32");
     let a_int: BigInt = extern_ref_to_bigint(a, &caller)?;
     Ok(bool_to_i32(a_int < b.into()))
 }
-fn rt_bignum_is_u64(caller: Caller<'_, HootStatus>, a: Rooted<ExternRef>) -> Result<i32> {
+fn rt_bignum_is_u64<T>(caller: Caller<'_, T>, a: Rooted<ExternRef>) -> Result<i32> {
     let a_int = extern_ref_to_bigint(a, &caller)?;
     trace!("bignum_is_u64");
     Ok(bool_to_i32(a_int.to_u64().is_some()))
 }
 
-fn ffi_is_extern_func(caller: Caller<'_, HootStatus>, _c: Rooted<ExternRef>) -> Result<i32> {
+fn ffi_is_extern_func<T>(caller: Caller<'_, T>, _c: Rooted<ExternRef>) -> Result<i32>
+where
+    T: Debug,
+{
     trace!("ffi_is_extern_func: {:?}", caller.data());
     todo!()
 }
 
-fn ffi_procedure_to_extern(
-    caller: Caller<'_, HootStatus>,
-    _c: Rooted<EqRef>,
-) -> Result<Rooted<ExternRef>> {
+fn ffi_procedure_to_extern<T>(caller: Caller<'_, T>, _c: Rooted<EqRef>) -> Result<Rooted<ExternRef>>
+where
+    T: Debug,
+{
     trace!("ffi_procedure_to_extern: {:?}", caller.data());
     todo!()
 }
 
-fn ffi_call_extern(
-    caller: Caller<'_, HootStatus>,
+fn ffi_call_extern<T>(
+    caller: Caller<'_, T>,
     _a: Rooted<ExternRef>,
     _b: Rooted<EqRef>,
-) -> Result<Rooted<EqRef>> {
+) -> Result<Rooted<EqRef>>
+where
+    T: Debug,
+{
     trace!("ffi_call_extern: {:?}", caller.data());
     todo!()
 }
 
-fn rt_bignum_rem(
-    caller: Caller<'_, HootStatus>,
+fn rt_bignum_rem<T>(
+    caller: Caller<'_, T>,
     a: Rooted<ExternRef>,
     b: Rooted<ExternRef>,
-) -> Result<Rooted<ExternRef>> {
+) -> Result<Rooted<ExternRef>>
+where
+    T: Debug,
+{
     let a_int: BigInt = extern_ref_to_bigint(a, &caller)?;
     let b_int: BigInt = extern_ref_to_bigint(b, &caller)?;
     let ret = &a_int % &b_int;
@@ -895,16 +874,16 @@ fn rt_bignum_rem(
     ExternRef::new(caller, ret)
 }
 
-fn rt_bignum_logior_i32(
-    _caller: Caller<'_, HootStatus>,
+fn rt_bignum_logior_i32<T>(
+    _caller: Caller<'_, T>,
     _a: Rooted<ExternRef>,
     _param: i32,
 ) -> Result<Rooted<ExternRef>> {
     trace!("bignum_logior_i32");
     todo!()
 }
-fn rt_bignum_logior(
-    _caller: Caller<'_, HootStatus>,
+fn rt_bignum_logior<T>(
+    _caller: Caller<'_, T>,
     _param: Rooted<ExternRef>,
     _b: Rooted<ExternRef>,
 ) -> Result<Rooted<ExternRef>> {
@@ -912,47 +891,47 @@ fn rt_bignum_logior(
     todo!()
 }
 
-fn rt_regexp_match_count(_caller: Caller<'_, HootStatus>, _param: Rooted<ExternRef>) -> i32 {
+fn rt_regexp_match_count<T>(_caller: Caller<'_, T>, _param: Rooted<ExternRef>) -> i32 {
     trace!("regexp_match_count");
 
     todo!()
 }
-fn finalization_finalization_registry_unregister(
-    _caller: Caller<'_, HootStatus>,
+fn finalization_finalization_registry_unregister<T>(
+    _caller: Caller<'_, T>,
     _param: Rooted<ExternRef>,
     _b: Rooted<EqRef>,
 ) -> i32 {
     trace!("finalization_registry_unregister");
     todo!();
 }
-fn rt_regexp_match_end(_caller: Caller<'_, HootStatus>, _a: Rooted<ExternRef>) -> i32 {
+fn rt_regexp_match_end<T>(_caller: Caller<'_, T>, _a: Rooted<ExternRef>) -> i32 {
     trace!("regexp_match_end");
     todo!();
 }
-fn rt_regexp_match_substring(
-    _caller: Caller<'_, HootStatus>,
+fn rt_regexp_match_substring<T>(
+    _caller: Caller<'_, T>,
     _b: Rooted<ExternRef>,
     _param: i32,
 ) -> Option<Rooted<ExternRef>> {
     trace!("regexp_match_substring");
     todo!();
 }
-fn rt_make_weak_map(caller: Caller<'_, HootStatus>) -> Result<Rooted<ExternRef>> {
+fn rt_make_weak_map<T>(caller: Caller<'_, T>) -> Result<Rooted<ExternRef>> {
     let c = WeakMap::new(20);
     trace!("make_weak_map");
     ExternRef::new(caller, c)
 }
-fn debug_debug_str_i32(_caller: Caller<'_, HootStatus>, _param: i32) -> Result<()> {
+fn debug_debug_str_i32<T>(_caller: Caller<'_, T>, _param: i32) -> Result<()> {
     trace!("debug_str_i32");
     todo!();
 }
-fn debug_debug_str(_caller: Caller<'_, HootStatus>, _a: Rooted<ExternRef>) -> Result<()> {
+fn debug_debug_str<T>(_caller: Caller<'_, T>, _a: Rooted<ExternRef>) -> Result<()> {
     trace!("debug_str");
     todo!();
 }
 
-fn debug_debug_str_scm(
-    _caller: Caller<'_, HootStatus>,
+fn debug_debug_str_scm<T>(
+    _caller: Caller<'_, T>,
     _a: Rooted<ExternRef>,
     _b: Rooted<EqRef>,
 ) -> Result<()> {
@@ -960,15 +939,15 @@ fn debug_debug_str_scm(
     todo!();
 }
 
-fn debug_code_source(
-    _caller: Caller<'_, HootStatus>,
+fn debug_code_source<T>(
+    _caller: Caller<'_, T>,
     _param: Func,
 ) -> (Option<Rooted<ExternRef>>, i32, i32) {
     trace!("code_source");
     todo!()
 }
-fn finalization_finalization_registry_register_with_token(
-    _caller: Caller<'_, HootStatus>,
+fn finalization_finalization_registry_register_with_token<T>(
+    _caller: Caller<'_, T>,
     _a: Rooted<ExternRef>,
     _param: Rooted<EqRef>,
     _c: Rooted<EqRef>,
@@ -977,15 +956,15 @@ fn finalization_finalization_registry_register_with_token(
     trace!("finalization_registry_register_with_token");
     todo!()
 }
-fn finalization_make_finalization_registry(
-    _caller: Caller<'_, HootStatus>,
+fn finalization_make_finalization_registry<T>(
+    _caller: Caller<'_, T>,
     _param: Rooted<ExternRef>,
 ) -> Result<Rooted<ExternRef>> {
     trace!("make_finalization_registry");
     todo!();
 }
-fn rt_bignum_lt(
-    caller: Caller<'_, HootStatus>,
+fn rt_bignum_lt<T>(
+    caller: Caller<'_, T>,
     a: Rooted<ExternRef>,
     b: Rooted<ExternRef>,
 ) -> Result<i32> {
@@ -995,8 +974,8 @@ fn rt_bignum_lt(
     trace!("bignum_lt, {:?} {:?} {:?}", &a_int, &b_int, a_int < b_int);
     Ok(bool_to_i32(ret))
 }
-fn rt_bignum_add_i32(
-    caller: Caller<'_, HootStatus>,
+fn rt_bignum_add_i32<T>(
+    caller: Caller<'_, T>,
     a: Rooted<ExternRef>,
     b: i32,
 ) -> Result<Rooted<ExternRef>> {
@@ -1005,8 +984,8 @@ fn rt_bignum_add_i32(
     trace!("bignum_add_i32 {:?}", &result);
     ExternRef::new(caller, result)
 }
-fn rt_bignum_add(
-    caller: Caller<'_, HootStatus>,
+fn rt_bignum_add<T>(
+    caller: Caller<'_, T>,
     a: Rooted<ExternRef>,
     _b: Rooted<ExternRef>,
 ) -> Result<Rooted<ExternRef>> {
@@ -1015,8 +994,8 @@ fn rt_bignum_add(
     let b_int = extern_ref_to_bigint(a, &caller)?;
     ExternRef::new(caller, a_int + b_int)
 }
-fn rt_bignum_lsh(
-    _caller: Caller<'_, HootStatus>,
+fn rt_bignum_lsh<T>(
+    _caller: Caller<'_, T>,
     _a: Rooted<ExternRef>,
     _b: i64,
 ) -> Result<Rooted<ExternRef>> {
@@ -1024,8 +1003,8 @@ fn rt_bignum_lsh(
     todo!()
 }
 
-fn rt_bignum_from_string(
-    caller: Caller<'_, HootStatus>,
+fn rt_bignum_from_string<T>(
+    caller: Caller<'_, T>,
     str: Rooted<ExternRef>,
 ) -> Result<Rooted<ExternRef>> {
     let cc = str.data(&caller)?.expect("wtf");
@@ -1036,16 +1015,13 @@ fn rt_bignum_from_string(
     trace!("bignum_from_string {:?}", &st);
     ExternRef::new(caller, nu)
 }
-fn rt_make_weak_ref(
-    _caller: Caller<'_, HootStatus>,
-    _param: Rooted<EqRef>,
-) -> Result<Rooted<ExternRef>> {
+fn rt_make_weak_ref<T>(_caller: Caller<'_, T>, _param: Rooted<EqRef>) -> Result<Rooted<ExternRef>> {
     trace!("make_weak_ref");
     todo!();
 }
 
-fn rt_weak_map_set(
-    _caller: Caller<'_, HootStatus>,
+fn rt_weak_map_set<T>(
+    _caller: Caller<'_, T>,
     _a: Rooted<ExternRef>,
     _b: Rooted<EqRef>,
     _c: Rooted<EqRef>,
@@ -1054,8 +1030,8 @@ fn rt_weak_map_set(
     todo!();
 }
 
-fn rt_weak_map_get(
-    _caller: Caller<'_, HootStatus>,
+fn rt_weak_map_get<T>(
+    _caller: Caller<'_, T>,
     _a: Rooted<ExternRef>,
     _b: Rooted<EqRef>,
     _c: Rooted<EqRef>,
@@ -1064,45 +1040,45 @@ fn rt_weak_map_get(
     todo!();
 }
 
-fn rt_current_second(_caller: Caller<'_, HootStatus>) -> Result<f64> {
+fn rt_current_second<T>(_caller: Caller<'_, T>) -> Result<f64> {
     trace!("rt_current_second");
     todo!();
 }
-fn rt_current_jiffy(_caller: Caller<'_, HootStatus>) -> Result<f64> {
+fn rt_current_jiffy<T>(_caller: Caller<'_, T>) -> Result<f64> {
     trace!("rt_current_jiffy");
     todo!();
 }
-fn rt_jiffies_per_second(_caller: Caller<'_, HootStatus>) -> Result<i32> {
+fn rt_jiffies_per_second<T>(_caller: Caller<'_, T>) -> Result<i32> {
     trace!("rt_jiffies_per_second");
     todo!();
 }
-fn rt_regexp_exec(
-    _caller: Caller<'_, HootStatus>,
+fn rt_regexp_exec<T>(
+    _caller: Caller<'_, T>,
     _a: Rooted<ExternRef>,
     _b: Rooted<ExternRef>,
 ) -> Option<Rooted<ExternRef>> {
     trace!("regexp_exec");
     todo!()
 }
-fn rt_regexp_match_string(
-    _caller: Caller<'_, HootStatus>,
+fn rt_regexp_match_string<T>(
+    _caller: Caller<'_, T>,
     _param: Rooted<ExternRef>,
 ) -> Result<Rooted<ExternRef>> {
     trace!("regexp_match_string");
     todo!()
 }
 
-fn rt_ftodo(_caller: Caller<'_, HootStatus>, _a: f64) -> Result<f64> {
+fn rt_ftodo<T>(_caller: Caller<'_, T>, _a: f64) -> Result<f64> {
     trace!("a TODO fn");
     todo!()
 }
 
-fn rt_fatan2(_caller: Caller<'_, HootStatus>, _a: f64, _b: f64) -> Result<f64> {
+fn rt_fatan2<T>(_caller: Caller<'_, T>, _a: f64, _b: f64) -> Result<f64> {
     trace!("rt_fatan2");
     todo!()
 }
 
-fn rt_bignum_logcount(_caller: Caller<'_, HootStatus>, _a: Rooted<ExternRef>) -> Result<i32> {
+fn rt_bignum_logcount<T>(_caller: Caller<'_, T>, _a: Rooted<ExternRef>) -> Result<i32> {
     trace!("rt_bignum_logcount");
     todo!()
 }
@@ -1117,7 +1093,7 @@ fn init_trace() {
 fn main() -> Result<()> {
     let cli = Cli::parse();
     init_trace();
-    let mut rt = Runtime::new(None)?;
+    let mut rt = Runtime::new(None, Some(HootStatus::new(30)))?;
     let engine = &rt.engine;
     let module = Module::from_file(&engine, cli.filename)?;
     rt.register_all_funcs(&module)?;
