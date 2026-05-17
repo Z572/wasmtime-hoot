@@ -41,24 +41,368 @@ fn bool_to_i32(b: bool) -> i32 {
     if b { 1 } else { 0 }
 }
 
+#[derive(Default, Debug)]
 struct Runtime {
     engine: Engine,
+    linker: Linker<HootStatus>,
+    store: Store<HootStatus>,
 }
 
 impl Runtime {
     fn new(config: Option<Config>) -> Result<Self> {
         let mut config: Config = config.unwrap_or_default();
-        config.wasm_gc(true);
-        config.wasm_tail_call(true);
         config.wasm_backtrace(true);
-        config.wasm_function_references(true);
-        config.wasm_reference_types(true);
-        config.wasm_gc(true);
-        config.wasm_tail_call(true);
         config.wasm_exceptions(true);
+        config.wasm_function_references(true);
+        config.wasm_gc(true);
+        config.wasm_reference_types(true);
         config.wasm_stack_switching(true);
+        config.wasm_tail_call(true);
         let engine = Engine::new(&config)?;
-        Ok(Self { engine })
+        let linker = Linker::new(&engine);
+        let store = Store::new(&engine, HootStatus::new(30));
+        Ok(Self {
+            engine,
+            linker,
+            store,
+        })
+    }
+    fn register_all_funcs(&mut self, module: &Module) -> Result<()> {
+        self.register_debug_funcs()?;
+        self.register_bignum_funcs()?;
+        self.register_ffi_funcs()?;
+        self.register_regexp_funcs()?;
+        self.register_io_funcs()?;
+        self.register_finalization_funcs()?;
+        self.register_weak_map_funcs()?;
+        self.register_time_funcs()?;
+        self.register_stream_funcs()?;
+        self.register_flonum_funcs()?;
+        self.register_exit_funcs()?;
+        self.register_string_funcs(&module)?;
+        Ok(())
+    }
+    fn register_bignum_funcs(&mut self) -> Result<()> {
+        self.linker.func_wrap("rt", "bignum_add", rt_bignum_add)?;
+        self.linker
+            .func_wrap("rt", "bignum_add_i32", rt_bignum_add_i32)?;
+        self.linker.func_wrap("rt", "bignum_eq", rt_bignum_eq)?;
+        self.linker
+            .func_wrap("rt", "bignum_eq_f64", rt_bignum_eq_f64)?;
+        self.linker
+            .func_wrap("rt", "bignum_from_i32", rt_bignum_from_i32)?;
+        self.linker
+            .func_wrap("rt", "bignum_from_i64", rt_bignum_from_i64)?;
+        self.linker
+            .func_wrap("rt", "bignum_from_string", rt_bignum_from_string)?;
+        self.linker
+            .func_wrap("rt", "bignum_from_u32", rt_bignum_from_u32)?;
+        self.linker
+            .func_wrap("rt", "bignum_from_u64", rt_bignum_from_u64)?;
+        self.linker.func_wrap("rt", "bignum_gcd", rt_bignum_gcd)?;
+        self.linker
+            .func_wrap("rt", "bignum_get_i64", rt_bignum_get_i64)?;
+        self.linker
+            .func_wrap("rt", "bignum_is_i64", rt_bignum_is_i64)?;
+        self.linker
+            .func_wrap("rt", "bignum_is_u64", rt_bignum_is_u64)?;
+        self.linker
+            .func_wrap("rt", "bignum_le_big_f64", rt_bignum_le_big_f64)?;
+        self.linker
+            .func_wrap("rt", "bignum_le_f64_big", rt_bignum_le_f64_big)?;
+        self.linker
+            .func_wrap("rt", "bignum_logand", rt_bignum_logand)?;
+        self.linker
+            .func_wrap("rt", "bignum_logand_i32", rt_bignum_logand_i32)?;
+        self.linker
+            .func_wrap("rt", "bignum_logcount", rt_bignum_logcount)?;
+        self.linker
+            .func_wrap("rt", "bignum_logior", rt_bignum_logior)?;
+        self.linker
+            .func_wrap("rt", "bignum_logior_i32", rt_bignum_logior_i32)?;
+        self.linker
+            .func_wrap("rt", "bignum_logxor", rt_bignum_logxor)?;
+        self.linker
+            .func_wrap("rt", "bignum_logxor_i32", rt_bignum_logxor_i32)?;
+        self.linker.func_wrap("rt", "bignum_lsh", rt_bignum_lsh)?;
+        self.linker
+            .func_wrap("rt", "bignum_lsh_i32_i64", rt_bignum_lsh_i32_i64)?;
+        self.linker.func_wrap("rt", "bignum_lt", rt_bignum_lt)?;
+        self.linker
+            .func_wrap("rt", "bignum_lt_big_f64", rt_bignum_lt_big_f64)?;
+        self.linker
+            .func_wrap("rt", "bignum_lt_big_i32", rt_bignum_lt_big_i32)?;
+        self.linker
+            .func_wrap("rt", "bignum_lt_f64_big", rt_bignum_lt_f64_big)?;
+        self.linker
+            .func_wrap("rt", "bignum_lt_i32_big", rt_bignum_lt_i32_big)?;
+        self.linker.func_wrap("rt", "bignum_mod", rt_bignum_mod)?;
+        self.linker.func_wrap("rt", "bignum_mul", rt_bignum_mul)?;
+        self.linker
+            .func_wrap("rt", "bignum_mul_i32", rt_bignum_mul_i32)?;
+        self.linker.func_wrap("rt", "bignum_quo", rt_bignum_quo)?;
+        self.linker.func_wrap("rt", "bignum_rem", rt_bignum_rem)?;
+        self.linker.func_wrap("rt", "bignum_rsh", rt_bignum_rsh)?;
+        self.linker.func_wrap("rt", "bignum_sub", rt_bignum_sub)?;
+        self.linker
+            .func_wrap("rt", "bignum_sub_i32", rt_bignum_sub_i32)?;
+        self.linker
+            .func_wrap("rt", "bignum_to_f64", rt_bignum_to_f64)?;
+        Ok(())
+    }
+
+    fn register_ffi_funcs(&mut self) -> Result<()> {
+        self.linker
+            .func_wrap("ffi", "call_extern", ffi_call_extern)?;
+        self.linker
+            .func_wrap("ffi", "is_extern_func", ffi_is_extern_func)?;
+        self.linker
+            .func_wrap("ffi", "procedure_to_extern", ffi_procedure_to_extern)?;
+
+        Ok(())
+    }
+    fn register_debug_funcs(&mut self) -> Result<()> {
+        // linker: &mut Linker<HootStatus>
+        self.linker
+            .func_wrap("debug", "code_name", debug_code_name)?;
+        self.linker
+            .func_wrap("debug", "code_source", debug_code_source)?;
+        self.linker
+            .func_wrap("debug", "debug_str", debug_debug_str)?;
+        self.linker
+            .func_wrap("debug", "debug_str_i32", debug_debug_str_i32)?;
+        self.linker
+            .func_wrap("debug", "debug_str_scm", debug_debug_str_scm)?;
+
+        Ok(())
+    }
+
+    fn register_regexp_funcs(&mut self) -> Result<()> {
+        self.linker.func_wrap("rt", "make_regexp", rt_make_regexp)?;
+        self.linker.func_wrap("rt", "regexp_exec", rt_regexp_exec)?;
+        self.linker
+            .func_wrap("rt", "regexp_match_count", rt_regexp_match_count)?;
+        self.linker
+            .func_wrap("rt", "regexp_match_end", rt_regexp_match_end)?;
+        self.linker
+            .func_wrap("rt", "regexp_match_start", rt_regexp_match_start)?;
+        self.linker
+            .func_wrap("rt", "regexp_match_string", rt_regexp_match_string)?;
+        self.linker
+            .func_wrap("rt", "regexp_match_substring", rt_regexp_match_substring)?;
+        Ok(())
+    }
+
+    fn register_io_funcs(&mut self) -> Result<()> {
+        self.linker.func_wrap("io", "close_file", io_close_file)?;
+        self.linker
+            .func_wrap("io", "file_buffer_ref", io_file_buffer_ref)?;
+        self.linker
+            .func_wrap("io", "file_buffer_set", io_file_buffer_set)?;
+        self.linker
+            .func_wrap("io", "file_buffer_size", io_file_buffer_size)?;
+        self.linker
+            .func_wrap("io", "file_random_access", io_file_random_access)?;
+        self.linker
+            .func_wrap("io", "open_input_file", io_open_input_file)?;
+        self.linker
+            .func_wrap("io", "open_output_file", io_open_output_file)?;
+        self.linker.func_wrap("io", "file_exists", io_file_exists)?;
+        self.linker.func_wrap("io", "delete_file", io_delete_file)?;
+        self.linker.func_wrap("io", "write_file", io_write_file)?;
+        self.linker.func_wrap("io", "read_file", io_read_file)?;
+        self.linker.func_wrap("io", "read_stdin", io_read_stdin)?;
+        self.linker.func_wrap("io", "seek_file", io_seek_file)?;
+        self.linker
+            .func_wrap("io", "write_stderr", io_write_stderr)?;
+        self.linker
+            .func_wrap("io", "write_stdout", io_write_stdout)?;
+
+        Ok(())
+    }
+    fn register_weak_map_funcs(&mut self) -> Result<()> {
+        self.linker
+            .func_wrap("rt", "make_weak_map", rt_make_weak_map)?;
+        self.linker
+            .func_wrap("rt", "make_weak_ref", rt_make_weak_ref)?;
+        self.linker
+            .func_wrap("rt", "weak_map_get", rt_weak_map_get)?;
+        self.linker
+            .func_wrap("rt", "weak_map_set", rt_weak_map_set)?;
+        self.linker
+            .func_wrap("rt", "weak_ref_deref", rt_weak_ref_deref)?;
+        Ok(())
+    }
+
+    fn register_string_funcs(&mut self, module: &Module) -> Result<()> {
+        self.linker
+            .func_wrap("rt", "string_downcase", rt_string_downcase)?;
+        self.linker
+            .func_wrap("rt", "string_upcase", rt_string_upcase)?;
+        {
+            let rt_string_to_wtf8_ty = module
+                .imports()
+                .find(|i| i.module() == "rt" && i.name() == "string_to_wtf8")
+                .ok_or_else(|| anyhow!("import not found"))?;
+
+            let rt_string_to_wtf8_func_ty: FuncType = match rt_string_to_wtf8_ty.ty() {
+                ExternType::Func(f) => f.clone(),
+                other => bail!("expected func import, got {other:?}"),
+            };
+            let rt_string_to_wtf8_result_val_ty = rt_string_to_wtf8_func_ty
+                .results()
+                .next()
+                .ok_or_else(|| anyhow!("missing result"))?
+                .clone();
+
+            let rt_string_to_wtf8_result_ref_ty = match rt_string_to_wtf8_result_val_ty {
+                ValType::Ref(r) => r,
+                _ => bail!("result is not a ref type"),
+            };
+
+            let concrete_array_ty = match rt_string_to_wtf8_result_ref_ty.heap_type() {
+                HeapType::ConcreteArray(arr_ty) => arr_ty.clone(),
+                ht => bail!("result heap type is not a concrete array: {ht:?}"),
+            };
+            let allocator = ArrayRefPre::new(&mut self.store, concrete_array_ty);
+            self.linker.func_new(
+                "rt",
+                "string_to_wtf8",
+                rt_string_to_wtf8_func_ty,
+                move |mut caller, _params, results| {
+                    trace!("string_to_wtf8");
+                    let m: String = match _params[0] {
+                        Val::ExternRef(Some(rooted)) => extern_ref_to_string(rooted, &caller)?,
+                        _ => todo!(),
+                    };
+                    let vals: Vec<Val> = m.as_bytes().iter().map(|&b| Val::I32(b as i32)).collect();
+                    let arr = ArrayRef::new_fixed(&mut caller, &allocator, &vals)?;
+                    results[0] = Val::AnyRef(Some(arr.to_anyref()));
+                    Ok(())
+                },
+            )?;
+        }
+
+        {
+            let rt_wtf8_to_string_ty = module
+                .imports()
+                .find(|i| i.module() == "rt" && i.name() == "wtf8_to_string")
+                .ok_or_else(|| anyhow!("import not found"))?;
+
+            let rt_wtf8_to_string_func_ty: FuncType = match rt_wtf8_to_string_ty.ty() {
+                ExternType::Func(f) => f,
+                other => bail!("expected func import, got {other:?}"),
+            };
+
+            self.linker.func_new(
+                "rt",
+                "wtf8_to_string",
+                rt_wtf8_to_string_func_ty,
+                move |mut caller, _params, results| {
+                    let any = _params[0];
+                    let ret = match any {
+                        Val::AnyRef(Some(rooted)) => {
+                            let array = rooted
+                                .clone()
+                                .as_eqref(&caller)?
+                                .ok_or_else(|| anyhow::anyhow!("not eqref?"))?
+                                .as_array(&caller)?
+                                .ok_or_else(|| anyhow::anyhow!("not array?"))?;
+                            let len = array.len(&caller)?;
+                            let mut bytes: Vec<u8> = Vec::with_capacity(len as usize);
+                            for i in 0..len {
+                                let elem = array.get(&mut caller, i)?;
+                                match elem {
+                                    Val::I32(x) => {
+                                        bytes.push((x & 0xff) as u8);
+                                    }
+                                    _ => {
+                                        bail!("wtf, not i32")
+                                    }
+                                }
+                            }
+                            String::from_utf8(bytes)?
+                        }
+                        _ => todo!(),
+                    };
+
+                    trace!("run wtf8_to_string {:?}", &ret);
+                    let ext_ref = ExternRef::new(&mut caller, ret.clone())?;
+                    results[0] = Val::ExternRef(Some(ext_ref));
+                    Ok(())
+                },
+            )?;
+        }
+        Ok(())
+    }
+
+    fn register_time_funcs(&mut self) -> Result<()> {
+        self.linker
+            .func_wrap("rt", "current_jiffy", rt_current_jiffy)?;
+        self.linker
+            .func_wrap("rt", "current_second", rt_current_second)?;
+        self.linker
+            .func_wrap("rt", "jiffies_per_second", rt_jiffies_per_second)?;
+        Ok(())
+    }
+
+    fn register_stream_funcs(&mut self) -> Result<()> {
+        self.linker
+            .func_wrap("rt", "stream_make_chunk", rt_stream_make_chunk)?;
+        self.linker.func_wrap("rt", "stream_read", rt_stream_read)?;
+        Ok(())
+    }
+
+    fn register_exit_funcs(&mut self) -> Result<()> {
+        self.linker.func_wrap("rt", "die", rt_die)?;
+        self.linker.func_wrap("rt", "quit", rt_quit)?;
+        Ok(())
+    }
+
+    fn register_flonum_funcs(&mut self) -> Result<()> {
+        self.linker.func_wrap("rt", "facos", rt_ftodo)?;
+        self.linker.func_wrap("rt", "fasin", rt_ftodo)?;
+        self.linker.func_wrap("rt", "fatan", rt_ftodo)?;
+        self.linker.func_wrap("rt", "fatan2", rt_fatan2)?;
+        self.linker.func_wrap("rt", "fcos", rt_ftodo)?;
+        self.linker.func_wrap("rt", "fexp", rt_ftodo)?;
+        self.linker.func_wrap("rt", "flog", rt_ftodo)?;
+        self.linker
+            .func_wrap("rt", "flonum_to_string", rt_flonum_to_string)?;
+        self.linker.func_wrap("rt", "fsin", rt_ftodo)?;
+        self.linker.func_wrap("rt", "ftan", rt_ftodo)?;
+        Ok(())
+    }
+
+    fn register_finalization_funcs(&mut self) -> Result<()> {
+        self.linker.func_wrap(
+            "finalization",
+            "finalization_registry_register",
+            finalization_finalization_registry_register,
+        )?;
+        self.linker.func_wrap(
+            "finalization",
+            "make_finalization_registry",
+            finalization_make_finalization_registry,
+        )?;
+        self.linker.func_wrap(
+            "finalization",
+            "finalization_registry_unregister",
+            finalization_finalization_registry_unregister,
+        )?;
+        self.linker.func_wrap(
+            "finalization",
+            "finalization_registry_register_with_token",
+            finalization_finalization_registry_register_with_token,
+        )?;
+        Ok(())
+    }
+    fn run(self, m: Module) -> Result<()> {
+        let mut store = self.store;
+        let n = self.linker.instantiate(&mut store, &m)?;
+        let f = n.get_typed_func::<(), ()>(&mut store, "main")?;
+        f.call(&mut store, ())?;
+        Ok(())
     }
 }
 
@@ -773,223 +1117,10 @@ fn init_trace() {
 fn main() -> Result<()> {
     let cli = Cli::parse();
     init_trace();
-    let rt = Runtime::new(None)?;
-    let engine = rt.engine;
-    let mut store = Store::new(&engine, HootStatus::new(30));
-    let mut linker = Linker::new(&engine);
+    let mut rt = Runtime::new(None)?;
+    let engine = &rt.engine;
     let module = Module::from_file(&engine, cli.filename)?;
-    {
-        let rt_string_to_wtf8_ty = module
-            .imports()
-            .find(|i| i.module() == "rt" && i.name() == "string_to_wtf8")
-            .ok_or_else(|| anyhow!("import not found"))?;
-
-        let rt_string_to_wtf8_func_ty: FuncType = match rt_string_to_wtf8_ty.ty() {
-            ExternType::Func(f) => f.clone(),
-            other => bail!("expected func import, got {other:?}"),
-        };
-        let rt_string_to_wtf8_result_val_ty = rt_string_to_wtf8_func_ty
-            .results()
-            .next()
-            .ok_or_else(|| anyhow!("missing result"))?
-            .clone();
-
-        let rt_string_to_wtf8_result_ref_ty = match rt_string_to_wtf8_result_val_ty {
-            ValType::Ref(r) => r,
-            _ => bail!("result is not a ref type"),
-        };
-
-        let concrete_array_ty = match rt_string_to_wtf8_result_ref_ty.heap_type() {
-            HeapType::ConcreteArray(arr_ty) => arr_ty.clone(),
-            ht => bail!("result heap type is not a concrete array: {ht:?}"),
-        };
-        let allocator = ArrayRefPre::new(&mut store, concrete_array_ty);
-        linker.func_new(
-            "rt",
-            "string_to_wtf8",
-            rt_string_to_wtf8_func_ty,
-            move |mut caller, _params, results| {
-                trace!("string_to_wtf8");
-                let m: String = match _params[0] {
-                    Val::ExternRef(Some(rooted)) => extern_ref_to_string(rooted, &caller)?,
-                    _ => todo!(),
-                };
-                let vals: Vec<Val> = m.as_bytes().iter().map(|&b| Val::I32(b as i32)).collect();
-                let arr = ArrayRef::new_fixed(&mut caller, &allocator, &vals)?;
-                results[0] = Val::AnyRef(Some(arr.to_anyref()));
-                Ok(())
-            },
-        )?;
-    }
-
-    {
-        let rt_wtf8_to_string_ty = module
-            .imports()
-            .find(|i| i.module() == "rt" && i.name() == "wtf8_to_string")
-            .ok_or_else(|| anyhow!("import not found"))?;
-
-        let rt_wtf8_to_string_func_ty: FuncType = match rt_wtf8_to_string_ty.ty() {
-            ExternType::Func(f) => f,
-            other => bail!("expected func import, got {other:?}"),
-        };
-
-        linker.func_new(
-            "rt",
-            "wtf8_to_string",
-            rt_wtf8_to_string_func_ty,
-            move |mut caller, _params, results| {
-                let any = _params[0];
-                let ret = match any {
-                    Val::AnyRef(Some(rooted)) => {
-                        let array = rooted
-                            .clone()
-                            .as_eqref(&caller)?
-                            .ok_or_else(|| anyhow::anyhow!("not eqref?"))?
-                            .as_array(&caller)?
-                            .ok_or_else(|| anyhow::anyhow!("not array?"))?;
-                        let len = array.len(&caller)?;
-                        let mut bytes: Vec<u8> = Vec::with_capacity(len as usize);
-                        for i in 0..len {
-                            let elem = array.get(&mut caller, i)?;
-                            match elem {
-                                Val::I32(x) => {
-                                    bytes.push((x & 0xff) as u8);
-                                }
-                                _ => {
-                                    bail!("wtf, not i32")
-                                }
-                            }
-                        }
-                        String::from_utf8(bytes)?
-                    }
-                    _ => todo!(),
-                };
-
-                trace!("run wtf8_to_string {:?}", &ret);
-                let ext_ref = ExternRef::new(&mut caller, ret.clone())?;
-                results[0] = Val::ExternRef(Some(ext_ref));
-                Ok(())
-            },
-        )?;
-    }
-
-    linker.func_wrap("debug", "code_name", debug_code_name)?;
-    linker.func_wrap("debug", "code_source", debug_code_source)?;
-    linker.func_wrap("debug", "debug_str", debug_debug_str)?;
-    linker.func_wrap("debug", "debug_str_i32", debug_debug_str_i32)?;
-    linker.func_wrap("debug", "debug_str_scm", debug_debug_str_scm)?;
-
-    linker.func_wrap("ffi", "call_extern", ffi_call_extern)?;
-    linker.func_wrap("ffi", "is_extern_func", ffi_is_extern_func)?;
-    linker.func_wrap("ffi", "procedure_to_extern", ffi_procedure_to_extern)?;
-
-    linker.func_wrap("io", "close_file", io_close_file)?;
-    linker.func_wrap("io", "file_buffer_ref", io_file_buffer_ref)?;
-    linker.func_wrap("io", "file_buffer_set", io_file_buffer_set)?;
-    linker.func_wrap("io", "file_buffer_size", io_file_buffer_size)?;
-    linker.func_wrap("io", "file_random_access", io_file_random_access)?;
-    linker.func_wrap("io", "open_input_file", io_open_input_file)?;
-    linker.func_wrap("io", "open_output_file", io_open_output_file)?;
-    linker.func_wrap("io", "file_exists", io_file_exists)?;
-    linker.func_wrap("io", "delete_file", io_delete_file)?;
-    linker.func_wrap("io", "write_file", io_write_file)?;
-    linker.func_wrap("io", "read_file", io_read_file)?;
-    linker.func_wrap("io", "read_stdin", io_read_stdin)?;
-    linker.func_wrap("io", "seek_file", io_seek_file)?;
-    linker.func_wrap("io", "write_stderr", io_write_stderr)?;
-    linker.func_wrap("io", "write_stdout", io_write_stdout)?;
-
-    linker.func_wrap("rt", "bignum_add", rt_bignum_add)?;
-    linker.func_wrap("rt", "bignum_add_i32", rt_bignum_add_i32)?;
-    linker.func_wrap("rt", "bignum_eq", rt_bignum_eq)?;
-    linker.func_wrap("rt", "bignum_eq_f64", rt_bignum_eq_f64)?;
-    linker.func_wrap("rt", "bignum_from_i32", rt_bignum_from_i32)?;
-    linker.func_wrap("rt", "bignum_from_i64", rt_bignum_from_i64)?;
-    linker.func_wrap("rt", "bignum_from_string", rt_bignum_from_string)?;
-    linker.func_wrap("rt", "bignum_from_u32", rt_bignum_from_u32)?;
-    linker.func_wrap("rt", "bignum_from_u64", rt_bignum_from_u64)?;
-    linker.func_wrap("rt", "bignum_gcd", rt_bignum_gcd)?;
-    linker.func_wrap("rt", "bignum_get_i64", rt_bignum_get_i64)?;
-    linker.func_wrap("rt", "bignum_is_i64", rt_bignum_is_i64)?;
-    linker.func_wrap("rt", "bignum_is_u64", rt_bignum_is_u64)?;
-    linker.func_wrap("rt", "bignum_le_big_f64", rt_bignum_le_big_f64)?;
-    linker.func_wrap("rt", "bignum_le_f64_big", rt_bignum_le_f64_big)?;
-    linker.func_wrap("rt", "bignum_logand", rt_bignum_logand)?;
-    linker.func_wrap("rt", "bignum_logand_i32", rt_bignum_logand_i32)?;
-    linker.func_wrap("rt", "bignum_logcount", rt_bignum_logcount)?;
-    linker.func_wrap("rt", "bignum_logior", rt_bignum_logior)?;
-    linker.func_wrap("rt", "bignum_logior_i32", rt_bignum_logior_i32)?;
-    linker.func_wrap("rt", "bignum_logxor", rt_bignum_logxor)?;
-    linker.func_wrap("rt", "bignum_logxor_i32", rt_bignum_logxor_i32)?;
-    linker.func_wrap("rt", "bignum_lsh", rt_bignum_lsh)?;
-    linker.func_wrap("rt", "bignum_lsh_i32_i64", rt_bignum_lsh_i32_i64)?;
-    linker.func_wrap("rt", "bignum_lt", rt_bignum_lt)?;
-    linker.func_wrap("rt", "bignum_lt_big_f64", rt_bignum_lt_big_f64)?;
-    linker.func_wrap("rt", "bignum_lt_big_i32", rt_bignum_lt_big_i32)?;
-    linker.func_wrap("rt", "bignum_lt_f64_big", rt_bignum_lt_f64_big)?;
-    linker.func_wrap("rt", "bignum_lt_i32_big", rt_bignum_lt_i32_big)?;
-    linker.func_wrap("rt", "bignum_mod", rt_bignum_mod)?;
-    linker.func_wrap("rt", "bignum_mul", rt_bignum_mul)?;
-    linker.func_wrap("rt", "bignum_mul_i32", rt_bignum_mul_i32)?;
-    linker.func_wrap("rt", "bignum_quo", rt_bignum_quo)?;
-    linker.func_wrap("rt", "bignum_rem", rt_bignum_rem)?;
-    linker.func_wrap("rt", "bignum_rsh", rt_bignum_rsh)?;
-    linker.func_wrap("rt", "bignum_sub", rt_bignum_sub)?;
-    linker.func_wrap("rt", "bignum_sub_i32", rt_bignum_sub_i32)?;
-    linker.func_wrap("rt", "bignum_to_f64", rt_bignum_to_f64)?;
-    linker.func_wrap("rt", "current_jiffy", rt_current_jiffy)?;
-    linker.func_wrap("rt", "current_second", rt_current_second)?;
-    linker.func_wrap("rt", "die", rt_die)?;
-    linker.func_wrap("rt", "facos", rt_ftodo)?;
-    linker.func_wrap("rt", "fasin", rt_ftodo)?;
-    linker.func_wrap("rt", "fatan", rt_ftodo)?;
-    linker.func_wrap("rt", "fatan2", rt_fatan2)?;
-    linker.func_wrap("rt", "fcos", rt_ftodo)?;
-    linker.func_wrap("rt", "fexp", rt_ftodo)?;
-    linker.func_wrap("rt", "flog", rt_ftodo)?;
-    linker.func_wrap("rt", "flonum_to_string", rt_flonum_to_string)?;
-    linker.func_wrap("rt", "fsin", rt_ftodo)?;
-    linker.func_wrap("rt", "ftan", rt_ftodo)?;
-    linker.func_wrap("rt", "jiffies_per_second", rt_jiffies_per_second)?;
-    linker.func_wrap("rt", "make_regexp", rt_make_regexp)?;
-    linker.func_wrap("rt", "make_weak_map", rt_make_weak_map)?;
-    linker.func_wrap("rt", "make_weak_ref", rt_make_weak_ref)?;
-    linker.func_wrap("rt", "quit", rt_quit)?;
-    linker.func_wrap("rt", "regexp_exec", rt_regexp_exec)?;
-    linker.func_wrap("rt", "regexp_match_count", rt_regexp_match_count)?;
-    linker.func_wrap("rt", "regexp_match_end", rt_regexp_match_end)?;
-    linker.func_wrap("rt", "regexp_match_start", rt_regexp_match_start)?;
-    linker.func_wrap("rt", "regexp_match_string", rt_regexp_match_string)?;
-    linker.func_wrap("rt", "regexp_match_substring", rt_regexp_match_substring)?;
-    linker.func_wrap("rt", "stream_make_chunk", rt_stream_make_chunk)?;
-    linker.func_wrap("rt", "stream_read", rt_stream_read)?;
-    linker.func_wrap("rt", "string_downcase", rt_string_downcase)?;
-    linker.func_wrap("rt", "string_upcase", rt_string_upcase)?;
-    linker.func_wrap("rt", "weak_map_get", rt_weak_map_get)?;
-    linker.func_wrap("rt", "weak_map_set", rt_weak_map_set)?;
-    linker.func_wrap("rt", "weak_ref_deref", rt_weak_ref_deref)?;
-    linker.func_wrap(
-        "finalization",
-        "finalization_registry_register",
-        finalization_finalization_registry_register,
-    )?;
-    linker.func_wrap(
-        "finalization",
-        "make_finalization_registry",
-        finalization_make_finalization_registry,
-    )?;
-    linker.func_wrap(
-        "finalization",
-        "finalization_registry_unregister",
-        finalization_finalization_registry_unregister,
-    )?;
-    linker.func_wrap(
-        "finalization",
-        "finalization_registry_register_with_token",
-        finalization_finalization_registry_register_with_token,
-    )?;
-    let c = linker.instantiate(&mut store, &module)?;
-    let f = c.get_typed_func::<(), ()>(&mut store, "main")?;
-    f.call(&mut store, ())?;
+    rt.register_all_funcs(&module)?;
+    rt.run(module)?;
     Ok(())
 }
